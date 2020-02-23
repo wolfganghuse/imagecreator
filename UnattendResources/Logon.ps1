@@ -562,64 +562,6 @@ try {
         shutdown -s -t 0 -f
     }
 
-    if ($vmwareToolsPath) {
-        Install-VMwareTools
-    }
-
-    Run-CustomScript "RunBeforeCloudbaseInitInstall.ps1"
-    $Host.UI.RawUI.WindowTitle = "Installing Cloudbase-Init..."
-
-    $cloudbaseInitInstallDir = Join-Path $ENV:ProgramFiles "Cloudbase Solutions\Cloudbase-Init"
-    $CloudbaseInitMsiPath = "$resourcesDir\CloudbaseInit.msi"
-    $CloudbaseInitConfigPath = "$resourcesDir\cloudbase-init.conf"
-    $CloudbaseInitUnattendedConfigPath = "$resourcesDir\cloudbase-init-unattend.conf"
-    $CloudbaseInitMsiLog = "$resourcesDir\CloudbaseInit.log"
-
-    if (!$serialPortName) {
-        $serialPorts = Get-WmiObject Win32_SerialPort
-        if ($serialPorts) {
-            $serialPortName = $serialPorts[0].DeviceID
-        }
-    }
-
-    $msiexecArgumentList = "/i $CloudbaseInitMsiPath /qn /l*v $CloudbaseInitMsiLog"
-    if ($serialPortName) {
-        $msiexecArgumentList += " LOGGINGSERIALPORTNAME=$serialPortName"
-    }
-
-    $cloudbaseInitUser = 'cloudbase-init'
-    if ($runCloudbaseInitUnderLocalSystem) {
-        $msiexecArgumentList += " RUN_SERVICE_AS_LOCAL_SYSTEM=1"
-        $cloudbaseInitUser = "LocalSystem"
-    }
-
-    $p = Start-Process -Wait -PassThru -FilePath msiexec -ArgumentList $msiexecArgumentList
-    if ($p.ExitCode -ne 0) {
-        Write-Log "Cloudbase-Init" "Failed to install cloudbase-init"
-        throw "Installing $CloudbaseInitMsiPath failed. Log: $CloudbaseInitMsiLog"
-    }
-
-    if (Test-Path $CloudbaseInitConfigPath) {
-        Copy-Item -Force $CloudbaseInitConfigPath "${cloudbaseInitInstallDir}\conf\cloudbase-init.conf"
-        Write-Log "CustomCloudbaseInitConfig" $CloudbaseInitConfigPath
-    }
-    if (Test-Path $CloudbaseInitUnattendedConfigPath) {
-        Copy-Item -Force $CloudbaseInitUnattendedConfigPath "${cloudbaseInitInstallDir}\conf\cloudbase-init-unattend.conf"
-        Write-Log "CustomCloudbaseInitUnattendConfig" $CloudbaseInitUnattendedConfigPath
-    }
-
-    if (!$setCloudbaseInitDelayedStart) {
-        Write-Log "Cloudbase-InitSetupComplete" "Cloudbase-Init service set to start using SetupComplete"
-        & "${cloudbaseInitInstallDir}\bin\SetSetupComplete.cmd"
-    } else {
-        cmd /c "sc config cloudbase-init start= delayed-auto"
-        if ($LASTEXITCODE) {
-            throw "Cloudbase-Init service startup type could not be set to delayed-auto"
-        }
-        Write-Log "Cloudbase-InitDelayedStart" "Cloudbase-Init service startup type set to delayed-auto"
-    }
-    Write-Log "Cloudbase-Init" "Service installed successfully under user ${cloudbaseInitUser}"
-    Run-CustomScript "RunAfterCloudbaseInitInstall.ps1"
 
     Run-Defragment
 
@@ -672,7 +614,7 @@ try {
 
     Run-CustomScript "RunBeforeSysprep.ps1"
     Optimize-SparseImage
-    & "$ENV:SystemRoot\System32\Sysprep\Sysprep.exe" `/generalize `/oobe `/shutdown `/unattend:"$unattendedXmlPath"
+    & "$ENV:SystemRoot\System32\Sysprep\Sysprep.exe" `/generalize `/oobe `/shutdown"
     Write-Log "Sysprep" "Sysprep initiated successfully"
     Run-CustomScript "RunAfterSysprep.ps1"
     Clean-UpdateResources
